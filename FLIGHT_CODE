@@ -1,0 +1,99 @@
+#define F_CPU 8000000
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+
+void usartInit (void)
+{
+	/*setting baud rate to 9600*/
+	UBRR0H=0x00;
+	UBRR0L=0x33;
+	/*setting no. of data bits to 8*/
+	UCSR0C=0x06;
+	/*enable receive complete interrupt, receiver enable, transmitter enable*/
+	UCSR0B=0x98;
+}
+
+void usartTrans(uint8_t data)
+{
+	/*wait for empty transmit buffer*/
+	while(!(UCSR0A & 0x20));
+	/*put data into buffer*/
+	UDR0 = data;
+}
+
+void adcInit(void)
+{
+	/*enabling ADC and setting prescaler to 16*/
+	ADCSRA |= (1<<ADEN)|(1<<ADPS2);
+}
+
+uint8_t adcConvert(uint8_t mux)
+{
+	/*left adjust result*/
+	ADMUX = (1<<ADLAR);
+	ADMUX |= mux;
+	/*start conversion*/
+	ADCSRA |= (1<<ADSC);
+	/*wait for conversion to finish*/
+	while(!(ADCSRA & (1<<ADIF)));
+	return ADCH;
+}
+
+uint8_t opMode;
+uint8_t count = 0;
+uint8_t hmData[14];
+uint8_t commData[4];
+
+int main()
+{
+	sei();
+	usartInit();
+	adcInit();
+	while(1)
+	{
+		switch(opMode)
+		{
+			/*nominal idle*/
+			case 1:
+				break;
+			
+			/*nominal uplink*/
+			case 2:
+				break;
+			
+			/*nominal downlink*/
+			case 3: 
+				break;
+		}
+		
+	}
+	return 0;
+}
+
+ISR(USART0_RX_vect)
+{
+	if(opMode!=3)
+		opMode = UDR0;
+	if(opMode==3)
+	{
+		/*receiving HM data from elec for downlink*/
+		hmData[count] = UDR0;
+		count++;
+		count%=14;
+	}
+	if(opMode==0)
+	{
+		/*collection of HM data from comm PCB*/
+		commData[0] = adcConvert(0x00);
+		commData[1] = adcConvert(0x01);
+		commData[2] = adcConvert(0x02);
+		commData[3] = adcConvert(0x03);
+		/*sending HM data of comm PCB to elec*/
+		usartTrans(commData[0]);
+		usartTrans(commData[1]);
+		usartTrans(commData[2]);
+		usartTrans(commData[3]);
+	}
+}
