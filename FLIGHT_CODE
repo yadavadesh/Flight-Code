@@ -11,16 +11,8 @@ void usartInit (void)
 	UBRR0L=0x33;
 	/*setting no. of data bits to 8*/
 	UCSR0C=0x06;
-	/*enable receive complete interrupt, receiver enable, transmitter enable*/
-	UCSR0B=0x98;
-}
-
-void usartTrans(uint8_t data)
-{
-	/*wait for empty transmit buffer*/
-	while(!(UCSR0A & 0x20));
-	/*put data into buffer*/
-	UDR0 = data;
+	/*enable receive complete interrupt, transmit complete interrupt, receiver enable, transmitter enable*/
+	UCSR0B=0xD8;
 }
 
 void adcInit(void)
@@ -31,6 +23,7 @@ void adcInit(void)
 
 uint8_t adcConvert(uint8_t mux)
 {
+	
 	/*left adjust result*/
 	ADMUX = (1<<ADLAR);
 	ADMUX |= mux;
@@ -41,30 +34,47 @@ uint8_t adcConvert(uint8_t mux)
 	return ADCH;
 }
 
-uint8_t opMode;
-uint8_t count = 0;
+uint8_t opMode = 1;
+uint8_t count = 0, i = 0;
 uint8_t hmData[14];
-uint8_t commData[4];
+uint8_t commData[5];
 
 int main()
 {
 	sei();
 	usartInit();
 	adcInit();
+	DDRA=0xFF;
+	PORTA=0x08;
 	while(1)
 	{
 		switch(opMode)
 		{
 			/*nominal idle*/
-			case 1:
+			case 1: /*acknowledge elec uC*/
 				break;
-			
+		
 			/*nominal uplink*/
-			case 2:
+			case 2: /*acknowledge elec uC*/
+				/*turn on LNA, put CC in receive mode*/
+				PORTA=0x09;
+				/*wait for some time*/
+				/*collect data from CC*/
+				/*turn off LNA, put CC in standby mode*/
+				PORTA=0x08;
+				/*process the uplinked data*/
+				opMode=1;
 				break;
 			
 			/*nominal downlink*/
-			case 3: 
+			case 3: /*acknowledge elec uC*/
+				/*switch HPS to downlink channel, turn on HPA, put CC in transmit mode*/
+				PORTA=0x16;
+				/*send preprocessed data to CC*/
+				/*wait for some time*/
+				/*switch HPS back to uplink, turn off HPA, put CC in standby mode*/
+				PORTA=0x08;
+				opMode=1;
 				break;
 		}
 		
@@ -74,26 +84,31 @@ int main()
 
 ISR(USART0_RX_vect)
 {
-	if(opMode!=3)
-		opMode = UDR0;
 	if(opMode==3)
 	{
 		/*receiving HM data from elec for downlink*/
 		hmData[count] = UDR0;
 		count++;
 		count%=14;
-	}
-	if(opMode==0)
+	} 
+	if(opMode==4)
 	{
 		/*collection of HM data from comm PCB*/
 		commData[0] = adcConvert(0x00);
 		commData[1] = adcConvert(0x01);
 		commData[2] = adcConvert(0x02);
 		commData[3] = adcConvert(0x03);
+		commData[4] = adcConvert(0x04);
 		/*sending HM data of comm PCB to elec*/
-		usartTrans(commData[0]);
-		usartTrans(commData[1]);
-		usartTrans(commData[2]);
-		usartTrans(commData[3]);
+		while(i<5)
+			UDR0=commData[i];
+		i%=5;
 	}
+	if(opMode!=3)
+		opMode = UDR0;
+}
+
+ISR(USART0_TX_vect)
+{
+	i++;
 }
