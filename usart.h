@@ -6,6 +6,6 @@
 #define USART_STATUS_C 0x06
 #define USART_STATUS_B 0xD8
 
-void usartInit(void) ;
+void usartInit(void);
 
 #endif
