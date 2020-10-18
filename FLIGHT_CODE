@@ -33,7 +33,6 @@ void adcInit(void)
 
 uint8_t adcConvert(uint8_t mux)
 {
-	
 	/*left adjust result*/
 	ADMUX = (1<<ADLAR);
 	ADMUX |= mux;
