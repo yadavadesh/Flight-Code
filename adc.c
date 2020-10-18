@@ -1,6 +1,5 @@
 #include "adc.h"
 #include "avr_compiler.h"
-#include "hmData.h"
 #include <stdlib.h>
 
 void adcInit(void)
