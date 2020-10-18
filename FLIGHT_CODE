@@ -54,7 +54,7 @@ int main()
 	sei();
 	usartInit();
 	adcInit();
-	DDRA=0xFF;
+	DDRA=0x1F;
 	PORTA=0x08;
 	while(1)
 	{
@@ -73,6 +73,7 @@ int main()
 				/*turn off LNA, put CC in standby mode*/
 				PORTA=0x08;
 				/*process the uplinked data*/
+				opMode = 1;
 				break;
 			
 			/*nominal downlink*/
@@ -83,6 +84,7 @@ int main()
 				/*wait for some time*/
 				/*switch HPS back to uplink, turn off HPA, put CC in standby mode*/
 				PORTA=0x08;
+				opMode = 1;
 				break;
 		}
 		
@@ -98,16 +100,11 @@ ISR(USART0_RX_vect)
 		hmData[count] = UDR0;
 		count++;
 		count%=14;
-		if(count==0)
-		{	
-			opMode=1;
-		}
 	}
 	if(opMode!=3)
 		opMode = UDR0; 
 	if(opMode==4)
 	{
-		PORTC=opMode;
 		/*collection of HM data from comm PCB*/
 		commData[0] = adcConvert(0x00);
 		commData[1] = adcConvert(0x01);
@@ -121,6 +118,7 @@ ISR(USART0_RX_vect)
 			i++;
 		}
 		i%=5;
+		opMode = 1;
 	}
 }
 
