@@ -18,15 +18,19 @@ uint8_t opMode = 1;
 uint8_t count = 0, i = 0;
 uint8_t hmData[14];
 uint8_t commData[5];
+uint8_t uplinkData[12];
 
 #include "usart.h"
+#include "spi.h"
 #include "adc.h"
 
 int main()
 {
 	sei();
 	usartInit();
+	spiMasterInit();
 	adcInit();
+	PORTB &= ~(1<<PB0);
 	DDRA=0x1F;
 	PORTA=0x08;
 	while(1)
@@ -43,6 +47,9 @@ int main()
 				PORTA=0x09;
 				/*wait for some time*/
 				/*collect data from CC*/
+				SPDR=0xFF;
+				_delay_ms(100);
+				i=0;
 				/*turn off LNA, put CC in standby mode*/
 				PORTA=0x08;
 				/*process the uplinked data*/
@@ -53,7 +60,13 @@ int main()
 			case 3: /*acknowledge elec uC*/
 				/*switch HPS to downlink channel, turn on HPA, put CC in transmit mode*/
 				PORTA=0x16;
+				/*preprocess hm data for downlink*/
 				/*send preprocessed data to CC*/
+				for(int k=0;k<14;k++)
+				{
+					SPDR=hmData[k];
+					_delay_ms(50);
+				}
 				/*wait for some time*/
 				/*switch HPS back to uplink, turn off HPA, put CC in standby mode*/
 				PORTA=0x08;
@@ -98,4 +111,14 @@ ISR(USART0_RX_vect)
 ISR(USART0_TX_vect)
 {
 	
+}
+
+ISR(SPI_STC_vect)
+{	
+	if((opMode==2) & (i<12))
+	{
+		uplinkData[i]=SPDR;
+		i++;
+		SPDR=0xFF;
+	}
 }
