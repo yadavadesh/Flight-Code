@@ -14,7 +14,7 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 
-void usartInit (void)
+void usartInit(void)
 {
 	/*setting baud rate to 9600*/
 	UBRR0H=0x00;
@@ -25,6 +25,15 @@ void usartInit (void)
 	UCSR0B=0xD8;
 }
 
+void spiMasterInit(void)
+{
+	/*Set MOSI, SCK and SS as output*/
+	DDRB = 0x07;
+	PORTB |= (1<<PB0);
+	/*Enable SPIE, SPI, master, clk rate fck/16*/
+	SPCR = 0xD1;
+}
+
 void adcInit(void)
 {
 	/*enabling ADC and setting prescaler to 16*/
@@ -33,6 +42,7 @@ void adcInit(void)
 
 uint8_t adcConvert(uint8_t mux)
 {
+	
 	/*left adjust result*/
 	ADMUX = (1<<ADLAR);
 	ADMUX |= mux;
@@ -47,13 +57,18 @@ uint8_t opMode = 1;
 uint8_t count = 0, i = 0;
 uint8_t hmData[14];
 uint8_t commData[5];
+uint8_t uplinkData[12];
 
 int main()
 {
 	sei();
 	usartInit();
+	spiMasterInit();
 	adcInit();
+	PORTB &= ~(1<<PB0);
 	DDRA=0x1F;
+	DDRD=0xFF;
+	DDRC=0xFF;
 	PORTA=0x08;
 	while(1)
 	{
@@ -61,30 +76,53 @@ int main()
 		{
 			/*nominal idle*/
 			case 1: /*acknowledge elec uC*/
-				break;
+					PORTC=opMode;
+					_delay_ms(100);
+					break;
 		
 			/*nominal uplink*/
 			case 2: /*acknowledge elec uC*/
-				/*turn on LNA, put CC in receive mode*/
-				PORTA=0x09;
-				/*wait for some time*/
-				/*collect data from CC*/
-				/*turn off LNA, put CC in standby mode*/
-				PORTA=0x08;
-				/*process the uplinked data*/
-				opMode = 1;
-				break;
+					PORTC=opMode;
+					/*turn on LNA, put CC in receive mode*/
+					PORTA=0x09;
+					_delay_ms(100);
+					/*wait for some time*/
+					/*collect data from CC*/
+					SPDR=0xFF;
+					_delay_ms(100);
+					i=0;
+					for(int j=1;j<12;j++)
+					{
+						PORTD=uplinkData[j];
+						_delay_ms(100);
+					}
+					/*turn off LNA, put CC in standby mode*/
+					PORTA=0x08;
+					_delay_ms(100);
+					/*process the uplinked data*/
+					opMode=1;
+					break;
 			
 			/*nominal downlink*/
 			case 3: /*acknowledge elec uC*/
-				/*switch HPS to downlink channel, turn on HPA, put CC in transmit mode*/
-				PORTA=0x16;
-				/*send preprocessed data to CC*/
-				/*wait for some time*/
-				/*switch HPS back to uplink, turn off HPA, put CC in standby mode*/
-				PORTA=0x08;
-				opMode = 1;
-				break;
+					PORTC=opMode;
+					_delay_ms(100);
+					/*switch HPS to downlink channel, turn on HPA, put CC in transmit mode*/
+					PORTA=0x16;
+					_delay_ms(100);
+					/*preprocess hm data for downlink*/
+					/*send preprocessed data to CC*/
+					for(int k=0;k<14;k++)
+					{
+						SPDR=hmData[k];
+						_delay_ms(50);
+					}
+					/*wait for some time*/
+					/*switch HPS back to uplink, turn off HPA, put CC in standby mode*/
+					PORTA=0x08;
+					_delay_ms(100);
+					opMode=1;
+					break;
 		}
 		
 	}
@@ -97,13 +135,21 @@ ISR(USART0_RX_vect)
 	{
 		/*receiving HM data from elec for downlink*/
 		hmData[count] = UDR0;
+		_delay_ms(100);
+		PORTD=hmData[count];
 		count++;
 		count%=14;
 	}
 	if(opMode!=3)
-		opMode = UDR0; 
+		opMode = UDR0;	
+	/*if(opMode==3 && count==14)
+	{
+		opMode=1;
+		count=0;
+	}*/
 	if(opMode==4)
 	{
+		PORTC=opMode;
 		/*collection of HM data from comm PCB*/
 		commData[0] = adcConvert(0x00);
 		commData[1] = adcConvert(0x01);
@@ -113,15 +159,27 @@ ISR(USART0_RX_vect)
 		/*sending HM data of comm PCB to elec*/
 		while(i<5)
 		{
+			//PORTB=commData[i];
 			UDR0=commData[i];
 			i++;
+			_delay_ms(100);	
 		}
 		i%=5;
-		opMode = 1;
+		opMode=1;
 	}
 }
 
 ISR(USART0_TX_vect)
 {
 	
+}
+
+ISR(SPI_STC_vect)
+{	
+	if((opMode==2) & (i<12))
+	{
+		uplinkData[i]=SPDR;
+		i++;
+		SPDR=0xFF;
+	}
 }
