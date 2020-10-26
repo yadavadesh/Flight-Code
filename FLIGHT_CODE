@@ -8,6 +8,10 @@
    PA2 and PA3 will turn on HPA, PA4 as high and PA5 as low will be the default configuration for HPS, making PA4 as low and PA5 as high will switch the HPS to downlink.
 */
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Code for Comm uC*/
+
 #define F_CPU 8000000
 
 #include <avr/io.h>
@@ -183,3 +187,139 @@ ISR(SPI_STC_vect)
 		SPDR=0xFF;
 	}
 }
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Code for Elec uC*/
+
+#define F_CPU 8000000
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+
+void usartInit (void)
+{
+	/*setting baud rate to 9600*/
+	UBRR0H=0x00;
+	UBRR0L=0x33;
+	/*setting no. of data bits to 8*/
+	UCSR0C=0x06;
+	/*enable receive complete interrupt, transmit complete interrupt, receiver enable, transmitter enable*/
+	UCSR0B=0xD8;
+}
+
+int i=1;
+uint8_t hmData[5];
+
+int main()
+{
+	sei();
+	usartInit();
+	DDRC=0xFF;
+	_delay_ms(100);
+	/*for simulating downlink part*/
+	/*
+	UDR0=0x03;
+	_delay_ms(100);
+	while(i<=14)
+	{	
+		UDR0=i;
+		i++;
+		_delay_ms(100);
+	}        
+	_delay_ms(2000);
+	*/
+	/*for simulating uplink part*/
+	/*
+	UDR0=0x02;
+	_delay_ms(2000);
+	*/
+	/*for receiving HM data from comm*/
+	/*
+	UDR0=0x04;
+	*/
+	while (1)
+	{
+			//PORTF=0xFF;
+	}
+}
+
+ISR(USART0_RX_vect)
+{
+	hmData[i]=UDR0;
+	PORTC=hmData[i];
+	_delay_ms(100);
+}
+
+ISR(USART0_TX_vect)
+{
+	
+}
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*Code for CC1125*/
+
+#define F_CPU 8000000
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+
+void spiSlaveInit(void)
+{
+	/*Set MISO as output*/
+	DDRB = 0x08;
+	/*Enable SPI*/
+	SPCR = 0xC0;
+}
+
+/*for simulation of downlink cycle*/
+/*
+uint8_t data[14];
+int i=0,j=0;
+
+ISR(SPI_STC_vect)
+{
+	data[i]=SPDR;
+	i++;
+}
+
+int main()
+{
+	sei();
+	spiSlaveInit();
+	DDRF=0xFF;
+	_delay_ms(2100);
+	for(j=0;j<14;j++)
+	{
+		PORTF=data[j];
+		_delay_ms(100);
+	}
+	return 0;
+}
+*/
+
+/*for simulation of uplink cycle*/
+/*
+char a[11]="UPLINK_DATA",trash;
+int i=0,j=0;
+
+ISR(SPI_STC_vect)
+{
+	trash=SPDR;
+	SPDR=a[i];
+	i++;
+}
+
+int main()
+{
+	sei();
+	spiSlaveInit();
+	DDRF=0xFF;
+	while(1);
+	
+	return 0;
+}
+*/
